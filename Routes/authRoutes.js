@@ -2,17 +2,17 @@ import express from "express";
 import passport from "passport";
 import jwt from "jsonwebtoken";
 
-const router = express.Router();
+const authRoutes = express.Router();
 
 // STEP 1: Redirect to Google
-router.get(
+authRoutes.get(
   "/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
 
 
 // STEP 2: Google callback
-router.get(
+authRoutes.get(
   "/google/callback",
   passport.authenticate("google", { session: false }),
   (req, res) => {
@@ -28,4 +28,4 @@ router.get(
   }
 );
 
-export default router;
+export default authRoutes;

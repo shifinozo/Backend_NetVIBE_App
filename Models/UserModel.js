@@ -41,15 +41,25 @@ import mongoose from "mongoose";
       type: Boolean,
       default: false,
     },
-    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
-    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "user" }],
+    followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
+    followRequests: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
 
     postsCount: {
       type: Number,
       default: 0
-    }
+    },
+    posts: [
+  {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Post",
   },
+],
+
+  },
+
+
   { timestamps: true }
 );
 
-export const userModel= mongoose.model("user", userSchema);
+export const userModel= mongoose.model("User", userSchema);
