@@ -1,10 +1,11 @@
 
 // -------------------------------------------------------------------------
 import cloudinary from "../config/cloudinaryconfig.js";
+import { Notification } from "../Models/Notificationmodel.js";
 import { postModel } from "../Models/postmodel.js";
 import { userModel } from "../Models/UserModel.js";
 
-// import { io } from "../server.js";
+
 
 
 
@@ -79,26 +80,7 @@ export const getPostById = async (req, res) => {
 };
 
 
-// export const likePost = async (req, res) => {
-//   try {
-//     const post = await postModel.findById(req.params.postId);
-//     const userId = req.user.id;
-
-//     if (post.likes.includes(userId)) {
-//       post.likes.pull(userId);
-//     } else {
-//       post.likes.push(userId);
-//     }
-
-//     await post.save();
-//     const updatedPost = await postModel.findById(req.params.postId)
-//       .populate("user", "username profilePic")
-//       .populate("comments.user", "username");
-//     res.status(200).json(updatedPost);
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to update like" });
-//   }
-// };
+// -------------------------------------------------------------
 
 export const likePost = async (req, res) => {
   try {
@@ -109,31 +91,49 @@ export const likePost = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    let liked;
+    const isLiked = post.likes.includes(userId);
 
-    if (post.likes.includes(userId)) {
-      // Unlike
+    if (isLiked) {
+      // 🔴 UNLIKE
       post.likes.pull(userId);
-      liked = false;
+
+      // ✅ DELETE LIKE NOTIFICATION
+      await Notification.findOneAndDelete({
+        type: "like",
+        sender: userId,
+        receiver: post.user,
+        post: post._id,
+      });
     } else {
-      // Like
+      // 🟢 LIKE
       post.likes.push(userId);
-      liked = true;
 
       if (post.user.toString() !== userId) {
-        await Notification.create({
+        // ✅ PREVENT DUPLICATE NOTIFICATION
+        const existing = await Notification.findOne({
           type: "like",
           sender: userId,
           receiver: post.user,
           post: post._id,
         });
+
+        if (!existing) {
+          await Notification.create({
+            type: "like",
+            sender: userId,
+            receiver: post.user,
+            post: post._id,
+          });
+        }
       }
     }
 
     await post.save();
-    const updatedPost = await postModel.findById(req.params.postId)
+
+    const updatedPost = await postModel
+      .findById(post._id)
       .populate("user", "username profilePic")
-      .populate("comments.user", "username");
+      .populate("comments.user", "username profilePic");
 
     res.status(200).json(updatedPost);
   } catch (err) {
@@ -142,25 +142,9 @@ export const likePost = async (req, res) => {
   }
 };
 
+// ------------------------------------------------------
 
-// export const addComment = async (req, res) => {
-//   try {
-//     const { text } = req.body;
-//     const post = await postModel.findById(req.params.postId);
-//     const userId = req.user.id;
 
-//     post.comments.push({ user: userId, text });
-//     await post.save();
-
-//     const updatedPost = await postModel.findById(req.params.postId)
-//       .populate("user", "username profilePic")
-//       .populate("comments.user", "username");
-
-//     res.status(200).json(updatedPost);
-//   } catch (err) {
-//     res.status(500).json({ message: "Failed to add comment" });
-//   }
-// };
 
 export const addComment = async (req, res) => {
   try {
@@ -198,36 +182,7 @@ export const addComment = async (req, res) => {
 };
 
 
-
-// with socket io
-// export const addComment = async (req, res) => {
-//   try {
-//     const post = await postModel.findById(req.params.postId);
-
-//     const newComment = {
-//       user: req.user.id,
-//       text: req.body.text,
-//     };
-
-//     post.comments.push(newComment);
-//     await post.save();
-
-//     const populatedPost = await postModel
-//       .findById(post._id)
-//       .populate("comments.user", "username profilePic");
-
-//     // 🔥 REAL-TIME EMIT
-//     io.to(post._id.toString()).emit("newComment", {
-//       postId: post._id,
-//       comment: populatedPost.comments.at(-1),
-//     });
-
-//     res.status(200).json(populatedPost);
-//   } catch (err) {
-//     res.status(500).json({ message: "Comment failed" });
-//   }
-// };
-
+// ------------------------------------------------------------------------
 
 
 export const deletePost = async (req, res) => {
@@ -262,12 +217,47 @@ export const deletePost = async (req, res) => {
 };
 // ----------------------------------------------------------------
 // home page
+
+
 export const getAllPosts = async (req, res) => {
-  const posts = await postModel
+  try {
+    const currentUserId = req.user.id;
+
+    // get current user with following list
+    const currentUser = await userModel
+    .findById(currentUserId)
+    .select("following");
+    
+    // get all posts with user populated (including isPrivate)
+    const posts = await postModel
     .find()
-    .populate("user", "username profilePic")
+    .populate("user", "username profilePic isPrivate followers")
     .populate("comments.user", "username")
     .sort({ createdAt: -1 });
+    
+    console.log("currentUserId:",currentUserId);
+        
+       const formatted = posts.map(post => ({
+    ...post.toObject(),
+    isOwner: post.user._id.toString() === currentUserId,
+  }))
 
-  res.json(posts);
+    // FILTER POSTS
+    const visiblePosts = posts.filter((post) => {
+      // public account → always visible
+      if (!post.user.isPrivate) return true;
+
+      // private account → visible only if following
+      return currentUser.following
+        .map((id) => id.toString())
+        .includes(post.user._id.toString());
+    });
+
+    res.json(visiblePosts);
+  } catch (error) {
+    console.error("Fetch posts error:", error);
+    res.status(500).json({ message: "Server error" });
+  }
 };
+
+

@@ -1,11 +1,14 @@
 
 import { Notification } from "../Models/Notificationmodel.js";
 
+
+
+
 export const getNotifications = async (req, res) => {
   try {
-    const userId = req.user.id;
-
-    const notifications = await Notification.find({ receiver: userId })
+    const notifications = await Notification.find({
+      receiver: req.user.id,
+    })
       .sort({ createdAt: -1 })
       .populate("sender", "username profilePic")
       .populate("post", "media");
@@ -16,3 +19,5 @@ export const getNotifications = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+

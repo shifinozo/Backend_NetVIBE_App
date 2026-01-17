@@ -2,9 +2,11 @@
 
 import express from "express";
 import {
+  acceptFollowRequest,
   editProfile,
   followUnfollowUser,
   getUserProfile,
+  rejectFollowRequest,
   searchUsers,
   UserProfile
 } from "../controllers/profilefetch.js";
@@ -25,7 +27,9 @@ proute.get("/search/users", Verifytoken, searchUsers);
 
 proute.post("/follow/:id", Verifytoken, followUnfollowUser);
 
-// proute.get("/profile/me", Verifytoken, getMyProfile)
+proute.post("/follow/accept/:id", Verifytoken, acceptFollowRequest);
+
+proute.post("/follow/reject/:id", Verifytoken, rejectFollowRequest);
 
 
 
