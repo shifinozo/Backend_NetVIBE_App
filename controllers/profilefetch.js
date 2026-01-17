@@ -2,6 +2,7 @@ import cloudinary from "../config/cloudinaryconfig.js";
 import { Notification } from "../Models/Notificationmodel.js";
 import { postModel } from "../Models/postmodel.js";
 import { userModel } from "../Models/UserModel.js";
+import { io } from "../server.js";
 
 export const UserProfile = async (req, res) => {
   try {
@@ -138,7 +139,6 @@ export const getUserProfile = async (req, res) => {
 // ----------------------------------------------------------
 
 
-
 export const followUnfollowUser = async (req, res) => {
   try {
     const targetUserId = req.params.id;
@@ -167,6 +167,19 @@ export const followUnfollowUser = async (req, res) => {
       await currentUser.save();
       await targetUser.save();
 
+      // 🔴 REMOVE FOLLOW NOTIFICATION (DB)
+      await Notification.deleteOne({
+        type: "follow",
+        sender: currentUserId,
+        receiver: targetUserId,
+      });
+
+      // 🔴 REAL-TIME REMOVE
+      io.to(targetUserId).emit("notification-remove", {
+        type: "follow",
+        sender: currentUserId,
+      });
+
       return res.json({ following: false });
     }
 
@@ -180,12 +193,19 @@ export const followUnfollowUser = async (req, res) => {
         targetUser.followRequests.push(currentUserId);
         await targetUser.save();
 
-        await Notification.create({
+        const notification = await Notification.create({
           type: "follow",
           sender: currentUserId,
           receiver: targetUserId,
           isRequest: true,
         });
+
+        const populated = await notification.populate(
+          "sender",
+          "username profilePic"
+        );
+
+        io.to(targetUserId).emit("notification", populated);
       }
 
       return res.json({ requested: true });
@@ -198,12 +218,20 @@ export const followUnfollowUser = async (req, res) => {
     await currentUser.save();
     await targetUser.save();
 
-    await Notification.create({
+    const notification = await Notification.create({
       type: "follow",
       sender: currentUserId,
       receiver: targetUserId,
       isRequest: false,
     });
+
+    const populated = await notification.populate(
+      "sender",
+      "username profilePic"
+    );
+
+    // 🟢 REAL-TIME FOLLOW NOTIFICATION
+    io.to(targetUserId).emit("notification", populated);
 
     return res.json({ following: true });
 
@@ -214,12 +242,14 @@ export const followUnfollowUser = async (req, res) => {
 };
 
 
+
 // ---------------------------------------------------------------
 
-  export const acceptFollowRequest = async (req, res) => {
+
+export const acceptFollowRequest = async (req, res) => {
   try {
-    const currentUserId = req.user.id;
-    const requesterId = req.params.id;
+    const currentUserId = req.user.id;   // private account owner
+    const requesterId = req.params.id;   // person who requested
 
     const currentUser = await userModel.findById(currentUserId);
     const requester = await userModel.findById(requesterId);
@@ -228,6 +258,7 @@ export const followUnfollowUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    // 1️⃣ UPDATE FOLLOW STATE
     currentUser.followRequests.pull(requesterId);
     currentUser.followers.push(requesterId);
     requester.following.push(currentUserId);
@@ -235,22 +266,53 @@ export const followUnfollowUser = async (req, res) => {
     await currentUser.save();
     await requester.save();
 
-    // ✅ DELETE FOLLOW REQUEST NOTIFICATION
+    // 2️⃣ DELETE FOLLOW REQUEST NOTIFICATION (DB)
     await Notification.deleteMany({
       sender: requesterId,
       receiver: currentUserId,
       isRequest: true,
     });
 
+    // 🔴 REALTIME REMOVE REQUEST NOTIFICATION
+    io.to(currentUserId).emit("notification-remove", {
+      type: "follow",
+      sender: requesterId,
+    });
+
+    // 3️⃣ CREATE "STARTED FOLLOWING YOU" NOTIFICATION
+    const followNotification = await Notification.create({
+      type: "follow",
+      sender: requesterId,
+      receiver: currentUserId,
+      isRequest: false,
+    });
+
+    const populated = await followNotification.populate(
+      "sender",
+      "username profilePic"
+    );
+
+    // 🟢 REALTIME ADD FOLLOW NOTIFICATION
+    io.to(currentUserId).emit("notification", populated);
+
+    // 🟢 OPTIONAL: INFORM REQUESTER (profile UI update)
+  
+        io.to(requesterId).emit("follow-request-accepted", {
+      userId: currentUserId,
+    });
+
+  
     res.json({ accepted: true });
   } catch (err) {
-    console.error(err);
+    console.error("Accept follow error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 
+
 // -----------------------------------------------
+
 
 export const rejectFollowRequest = async (req, res) => {
   try {
@@ -258,15 +320,28 @@ export const rejectFollowRequest = async (req, res) => {
     const requesterId = req.params.id;
 
     const currentUser = await userModel.findById(currentUserId);
+    if (!currentUser) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     currentUser.followRequests.pull(requesterId);
     await currentUser.save();
 
-    // ✅ DELETE FOLLOW REQUEST NOTIFICATION
     await Notification.deleteMany({
       sender: requesterId,
       receiver: currentUserId,
       isRequest: true,
+    });
+
+    // ✅ REMOVE notification for current user
+    io.to(currentUserId).emit("notification-remove", {
+      type: "follow",
+      sender: requesterId,
+    });
+
+    // ✅ INFORM REQUESTER (THIS WAS MISSING 🔥)
+    io.to(requesterId).emit("follow-request-rejected", {
+      userId: currentUserId,
     });
 
     res.json({ rejected: true });
@@ -277,24 +352,24 @@ export const rejectFollowRequest = async (req, res) => {
 };
 
 
+
 // ---------------------------------------------
 
 export const searchUsers = async (req, res) => {
+  
   const currentUserId = req.user.id;
 
-  const users = await userModel.find(
-    { _id: { $ne: currentUserId } },
-    "username profilePic followers"
-  );
+const users = await userModel.find({ _id: { $ne: currentUserId } });
 
-  const result = users.map(user => ({
-    _id: user._id,
-    username: user.username,
-    profilePic: user.profilePic,
-    isFollowing: user.followers.includes(currentUserId),
-  }));
+const formatted = users.map(u => ({
+  ...u.toObject(),
+  isFollowing: u.followers
+    .map(id => id.toString())
+    .includes(currentUserId)
+}));
 
-  res.json(result);
+res.json(formatted);
+
 };
 
 

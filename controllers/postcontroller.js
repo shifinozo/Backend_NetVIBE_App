@@ -5,7 +5,7 @@ import { Notification } from "../Models/Notificationmodel.js";
 import { postModel } from "../Models/postmodel.js";
 import { userModel } from "../Models/UserModel.js";
 
-
+import { io } from "../server.js"
 
 
 
@@ -104,6 +104,13 @@ export const likePost = async (req, res) => {
         receiver: post.user,
         post: post._id,
       });
+     
+      io.to(post.user.toString()).emit("notification-remove", {
+        type: "like",
+        sender: userId,
+        post: post._id.toString(),
+      });
+
     } else {
       // 🟢 LIKE
       post.likes.push(userId);
@@ -118,13 +125,22 @@ export const likePost = async (req, res) => {
         });
 
         if (!existing) {
-          await Notification.create({
+          const notification = await Notification.create({
             type: "like",
             sender: userId,
             receiver: post.user,
             post: post._id,
           });
+          const populatedNotification = await notification.populate(
+            "sender",
+            "username profilePic"
+          );
+
+          await populatedNotification.populate("post", "media");
+
+          io.to(post.user.toString()).emit("notification", populatedNotification);
         }
+        
       }
     }
 
@@ -145,11 +161,10 @@ export const likePost = async (req, res) => {
 // ------------------------------------------------------
 
 
-
 export const addComment = async (req, res) => {
   try {
     const { text } = req.body;
-    const postId = req.params.postId; 
+    const postId = req.params.postId;
     const userId = req.user.id;
 
     const post = await postModel.findById(postId);
@@ -157,17 +172,33 @@ export const addComment = async (req, res) => {
       return res.status(404).json({ message: "Post not found" });
     }
 
-    const comment = { user: userId, text };
-    post.comments.push(comment);
+    post.comments.push({ user: userId, text });
     await post.save();
 
+    let notification = null;
+
+    // 🚫 prevent self notification
     if (post.user.toString() !== userId) {
-      await Notification.create({
+      notification = await Notification.create({
         type: "comment",
         sender: userId,
         receiver: post.user,
         post: post._id,
       });
+
+      // ✅ populate before emit
+      notification = await notification.populate(
+        "sender",
+        "username profilePic"
+      );
+
+      notification = await notification.populate(
+        "post",
+        "media"
+      );
+
+      // 🔔 REAL-TIME COMMENT NOTIFICATION
+      io.to(post.user.toString()).emit("notification", notification);
     }
 
     const updatedPost = await postModel.findById(postId)
@@ -180,6 +211,67 @@ export const addComment = async (req, res) => {
     res.status(500).json({ message: "Failed to add comment" });
   }
 };
+
+// -------------------------------------------------------------------------
+
+
+export const deleteComment = async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const userId = req.user.id;
+
+    const post = await postModel.findById(postId);
+    if (!post) {
+      return res.status(404).json({ message: "Post not found" });
+    }
+
+    const comment = post.comments.id(commentId);
+    if (!comment) {
+      return res.status(404).json({ message: "Comment not found" });
+    }
+
+    const isCommentOwner = comment.user.toString() === userId;
+    const isPostOwner = post.user.toString() === userId;
+
+    if (!isCommentOwner && !isPostOwner) {
+      return res.status(403).json({ message: "Not allowed" });
+    }
+
+    // 🗑 delete comment
+    comment.deleteOne();
+    await post.save();
+
+
+    // find notification FIRST
+      const notification = await Notification.findOne({
+        type: "comment",
+        sender: comment.user,
+        receiver: post.user,
+        post: post._id,
+      });
+
+      if (notification) {
+        await notification.deleteOne();
+
+        io.to(post.user.toString()).emit("notification-remove", {
+          type: "comment",
+          sender: comment.user.toString(),
+          post: post._id.toString(),
+        });
+      }
+
+
+    const updatedPost = await postModel.findById(postId)
+      .populate("user", "username profilePic")
+      .populate("comments.user", "username profilePic");
+
+    res.status(200).json(updatedPost);
+  } catch (err) {
+    console.error("Delete comment error:", err);
+    res.status(500).json({ message: "Failed to delete comment" });
+  }
+};
+
 
 
 // ------------------------------------------------------------------------

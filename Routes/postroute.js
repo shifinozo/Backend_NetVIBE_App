@@ -3,7 +3,7 @@
 import express from "express";
 import upload from "../Middlewares/multer.js";
 import Verifytoken from "../Middlewares/verifytoken.js";
-import { addComment, createPost, deletePost, getAllPosts, getPostById, getUserPosts, likePost } from "../controllers/postcontroller.js";
+import { addComment, createPost, deleteComment, deletePost, getAllPosts, getPostById, getUserPosts, likePost } from "../controllers/postcontroller.js";
 
 
 const postrouter = express.Router();
@@ -25,6 +25,7 @@ postrouter.get(
 postrouter.get("/posts/:postId", Verifytoken, getPostById);
 postrouter.put("/posts/:postId/like", Verifytoken, likePost);
 postrouter.post("/posts/:postId/comment", Verifytoken, addComment);
+postrouter.delete("/posts/:postId/comment/:commentId",Verifytoken,deleteComment);
 postrouter.delete("/posts/:postId",Verifytoken,deletePost)
 // home
 postrouter.get("/posts", Verifytoken, getAllPosts)

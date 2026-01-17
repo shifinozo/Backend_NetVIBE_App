@@ -19,7 +19,7 @@ const postSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: "",
-      maxlength: 2200, // Instagram-like
+      maxlength: 2200, 
     },
 
     likes: [
