@@ -5,6 +5,7 @@ import {
   acceptFollowRequest,
   editProfile,
   followUnfollowUser,
+  getMyProfile,
   getUserProfile,
   rejectFollowRequest,
   searchUsers,
@@ -39,6 +40,8 @@ proute.put(
   upload.single("profilePic"),
   editProfile
 );
+
+proute.get("/profile/getUserProfile/me", Verifytoken, getMyProfile);
 
 // -----------------------------------------------------
 

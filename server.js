@@ -1,7 +1,4 @@
 
-
-
-
 // import express from "express";
 // import dotenv from "dotenv";
 // import cors from "cors";
@@ -41,7 +38,7 @@
 //     console.log("Backend running on http://localhost:5000");
 //   });
  
-// -------------------------------------------------------------------------------------------
+// ----------------------------------------------------------------------------------
 
 import express from "express";
 import dotenv from "dotenv";
@@ -56,7 +53,11 @@ import { router } from "./Routes/userroutes.js";
 import { proute } from "./Routes/profileroute.js";
 import postrouter from "./Routes/postroute.js";
 import notirouter from "./Routes/notificationRouter.js";
+import chatRouter from "./Routes/chatRoutes.js";
 import "./config/passport.js";
+
+import Conversation from "./Models/Conversation.js";
+import Message from "./Models/Message.js";
 
 dotenv.config();
 connectDB();
@@ -67,7 +68,7 @@ const server = http.createServer(app);
 /* 🔥 SOCKET.IO SETUP */
 export const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173", // your frontend
+    origin: "http://localhost:5173",
     credentials: true,
   },
 });
@@ -81,23 +82,71 @@ app.use("/api", router);
 app.use("/api", proute);
 app.use("/api", postrouter);
 app.use("/api", notirouter);
+app.use("/api/chat", chatRouter);
 
-/* 🔌 SOCKET CONNECTION */
+/* ================= SOCKET LOGIC ================= */
+
+const onlineUsers = new Map(); // userId => socketId
+
 io.on("connection", (socket) => {
-  console.log("User connected:", socket.id);
+  console.log("🟢 User connected:", socket.id);
 
+  // 🔹 USER ONLINE
   socket.on("join", (userId) => {
-    socket.join(userId); // room = userId
+    onlineUsers.set(userId, socket.id);
+    socket.join(userId);
+
+    io.emit("online-users", Array.from(onlineUsers.keys()));
   });
 
+  // 🔹 JOIN CONVERSATION ROOM
+  socket.on("join-conversation", (conversationId) => {
+    socket.join(conversationId);
+  });
 
+  // 🔹 SEND MESSAGE (REAL-TIME)
+  socket.on(
+    "send-message",
+    async ({ conversationId, senderId, text }) => {
+      try {
+        const message = await Message.create({
+          conversation: conversationId,
+          sender: senderId,
+          text,
+        });
+
+        await Conversation.findByIdAndUpdate(conversationId, {
+          lastMessage: message._id,
+        });
+
+        const populatedMessage = await message.populate(
+          "sender",
+          "username profilePic"
+        );
+
+        // Emit to conversation room
+        io.to(conversationId).emit("new-message", populatedMessage);
+      } catch (err) {
+        console.error("Message error:", err);
+      }
+    }
+  );
+
+  // 🔴 USER OFFLINE
   socket.on("disconnect", () => {
-    console.log("User disconnected");
+    for (let [userId, socketId] of onlineUsers.entries()) {
+      if (socketId === socket.id) {
+        onlineUsers.delete(userId);
+        break;
+      }
+    }
+
+    io.emit("online-users", Array.from(onlineUsers.keys()));
+    console.log("🔴 User disconnected:", socket.id);
   });
 });
 
 
-
 server.listen(5000, () => {
-  console.log("Backend running on http://localhost:5000");
+  console.log("🚀 Backend running on http://localhost:5000");
 });

@@ -48,10 +48,6 @@ export const UserProfile = async (req, res) => {
 
 // -------------------------------------------------------------------------------------
 
-
-
-
-
 export const editProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -62,34 +58,28 @@ export const editProfile = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    
     if (username) user.username = username;
     if (bio) user.bio = bio;
 
-    // 🔥 MAIN FIX
     if (isPrivate !== undefined) {
       user.isPrivate = isPrivate === "true";
     }
 
+   
     if (req.file) {
-      const uploadResult = await cloudinary.uploader.upload_stream(
-        { folder: "profilePics" },
-        async (error, result) => {
-          if (error) {
-            return res.status(500).json({ message: "Image upload failed" });
+      const result = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: "profilePics" },
+          (error, result) => {
+            if (error) reject(error);
+            else resolve(result);
           }
+        );
+        stream.end(req.file.buffer);
+      });
 
-          user.profilePic = result.secure_url;
-          await user.save();
-
-          return res.status(200).json({
-            message: "Profile updated successfully",
-            user,
-          });
-        }
-      );
-
-      uploadResult.end(req.file.buffer);
-      return;
+      user.profilePic = result.secure_url;
     }
 
     await user.save();
@@ -103,6 +93,28 @@ export const editProfile = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ------------------------------------------------------------
+
+export const getMyProfile = async (req, res) => {
+  try {
+    const user = await userModel
+      .findById(req.user.id)
+      .select("username bio profilePic isPrivate");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.status(200).json({ user });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+
 // ----------------------------------------------------
 
 export const getUserProfile = async (req, res) => {
@@ -248,8 +260,8 @@ export const followUnfollowUser = async (req, res) => {
 
 export const acceptFollowRequest = async (req, res) => {
   try {
-    const currentUserId = req.user.id;   // private account owner
-    const requesterId = req.params.id;   // person who requested
+    const currentUserId = req.user.id;  
+    const requesterId = req.params.id;   
 
     const currentUser = await userModel.findById(currentUserId);
     const requester = await userModel.findById(requesterId);
@@ -258,15 +270,14 @@ export const acceptFollowRequest = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // 1️⃣ UPDATE FOLLOW STATE
+    
     currentUser.followRequests.pull(requesterId);
     currentUser.followers.push(requesterId);
     requester.following.push(currentUserId);
 
     await currentUser.save();
     await requester.save();
-
-    // 2️⃣ DELETE FOLLOW REQUEST NOTIFICATION (DB)
+    
     await Notification.deleteMany({
       sender: requesterId,
       receiver: currentUserId,

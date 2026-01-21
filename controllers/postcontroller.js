@@ -49,6 +49,8 @@ export const getUserPosts = async (req, res) => {
     const posts = await postModel
       .find({ user: req.params.userId })
       .populate("user", "username profilePic")
+      .populate("likes", "username")
+      .populate("comments.user", "username profilePic")
       .sort({ createdAt: -1 });
 
     res.status(200).json(posts);
@@ -315,12 +317,10 @@ export const getAllPosts = async (req, res) => {
   try {
     const currentUserId = req.user.id;
 
-    // get current user with following list
     const currentUser = await userModel
     .findById(currentUserId)
     .select("following");
     
-    // get all posts with user populated (including isPrivate)
     const posts = await postModel
     .find()
     .populate("user", "username profilePic isPrivate followers")
@@ -334,12 +334,11 @@ export const getAllPosts = async (req, res) => {
     isOwner: post.user._id.toString() === currentUserId,
   }))
 
-    // FILTER POSTS
     const visiblePosts = posts.filter((post) => {
-      // public account → always visible
+
       if (!post.user.isPrivate) return true;
 
-      // private account → visible only if following
+
       return currentUser.following
         .map((id) => id.toString())
         .includes(post.user._id.toString());

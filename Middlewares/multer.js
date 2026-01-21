@@ -1,6 +1,10 @@
 import multer from "multer";
 
 const fileFilter = (req, file, cb) => {
+  
+  if (!file) {
+    return cb(null, true);
+  }
   const allowed = [
     "image/jpeg",
     "image/png",
