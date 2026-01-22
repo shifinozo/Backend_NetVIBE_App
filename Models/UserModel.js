@@ -52,7 +52,17 @@ import mongoose from "mongoose";
     type: mongoose.Schema.Types.ObjectId,
     ref: "Post",
   },
-],
+  ],
+  otp: {
+    type: String,
+  },
+  otpExpires: {
+    type: Date,
+  },
+  isVerified: {
+    type: Boolean,
+    default: false,
+  },
 
   },
 
