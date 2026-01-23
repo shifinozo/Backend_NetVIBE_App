@@ -1,9 +1,9 @@
 
 import bcrypt from "bcryptjs";
+// import bcrypt from "bcrypt";
+
 import jwt from "jsonwebtoken";
 import { userModel } from "../Models/UserModel.js";
-
-
 
 import crypto from "crypto";
 import { sendOTPEmail } from "../utils/sendEmail.js";
@@ -70,48 +70,108 @@ export const verifyOtp = async (req, res) => {
 
 
 
-export const loginUser = async (req, res) => {
-  try {
-    const { email, username, password, googleId } = req.body;
-    // google login
-    if (googleId) {
-      const user = await userModel.findOne({ email });
+// export const loginUser = async (req, res) => {
+//   try {
+//     const { email, username, password, googleId } = req.body;
+//     // google login
+//     if (googleId) {
+//       const user = await userModel.findOne({ email });
 
-      if (!user) {
-        return res.status(404).json({
-          message: "User not found"
-        });
-      }
+//       if (!user) {
+//         return res.status(404).json({
+//           message: "User not found"
+//         });
+//       }
 
-      if (user.googleId !== googleId) {
-        return res.status(401).json({
-          message: "Invalid Google login"
-        });
-      }
+//       if (user.googleId !== googleId) {
+//         return res.status(401).json({
+//           message: "Invalid Google login"
+//         });
+//       }
 
-      const token = jwt.sign(
-        { id: user._id },
-        process.env.JWT_SECRET,
-        { expiresIn: "7d" }
-      );
+//       const token = jwt.sign(
+//         { id: user._id },
+//         process.env.JWT_SECRET,
+//         { expiresIn: "7d" }
+//       );
      
       
 
-      return res.status(200).json({
-        message: "Google login successful",
-        token,
-        user
-      });
+//       return res.status(200).json({
+//         message: "Google login successful",
+//         token,
+//         user
+//       });
+//     }
+
+//   //  normal login
+//     const user = await userModel.findOne({
+//       $or: [{ email }, { username }]
+//     });
+
+//     if (!user) {
+//       return res.status(404).json({
+//         message: "User not found"
+//       });
+//     }
+
+//     if (!user.password) {
+//       return res.status(400).json({
+//         message: "Please login using Google"
+//       });
+//     }
+
+//     const isMatch = await bcrypt.compare(password, user.password);
+
+//     if (!isMatch) {
+//       return res.status(401).json({
+//         message: "Invalid credentials"
+//       });
+//     }
+
+    
+//     const token = jwt.sign(
+//       { id: user._id },
+//       process.env.JWT_SECRET,
+//       { expiresIn: "7d" }
+//     );
+
+//     res.status(200).json({
+//       message: "Login successful",
+//       token,
+//       user
+//     });
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({
+//       message: "Server error"
+//     });
+//   }
+// };
+
+
+export const loginUser = async (req, res) => {
+  console.log("LOGIN API HIT");
+  try {
+    const { email, username, password } = req.body;
+
+    let user;
+
+    if (email) {
+      user = await userModel.findOne({ email });
+    } else if (username) {
+      user = await userModel.findOne({ username });
     }
 
-  //  normal login
-    const user = await userModel.findOne({
-      $or: [{ email }, { username }]
-    });
-
     if (!user) {
-      return res.status(404).json({
-        message: "User not found"
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // 🔐 OTP verification check
+    if (!user.isVerified) {
+      return res.status(403).json({
+        message: "Please verify your email before logging in"
       });
     }
 
@@ -121,6 +181,9 @@ export const loginUser = async (req, res) => {
       });
     }
 
+    console.log("started");
+    
+
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
@@ -129,7 +192,6 @@ export const loginUser = async (req, res) => {
       });
     }
 
-    
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
@@ -143,12 +205,11 @@ export const loginUser = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      message: "Server error"
-    });
+    console.error("Login error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // ----------------------------------------------------------

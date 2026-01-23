@@ -17,3 +17,34 @@ export const getNotifications = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ------------------------------------------
+
+export const getUnreadCount = async (req, res) => {
+  try {
+    const count = await Notification.countDocuments({
+      receiver: req.user.id,
+      isRead: false,
+    });
+
+    res.json({ count });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// -------------------------------------------
+
+export const markNotificationsRead = async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { receiver: req.user.id, isRead: false },
+      { isRead: true }
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
