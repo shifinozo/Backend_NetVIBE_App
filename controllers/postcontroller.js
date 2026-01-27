@@ -318,31 +318,31 @@ export const getAllPosts = async (req, res) => {
     const currentUserId = req.user.id;
 
     const currentUser = await userModel
-    .findById(currentUserId)
-    .select("following");
-    
+      .findById(currentUserId)
+      .select("following");
+
     const posts = await postModel
-    .find()
-    .populate("user", "username profilePic isPrivate followers")
-    .populate("comments.user", "username")
-    .sort({ createdAt: -1 });
-    
-    console.log("currentUserId:",currentUserId);
-        
-       const formatted = posts.map(post => ({
-    ...post.toObject(),
-    isOwner: post.user._id.toString() === currentUserId,
-  }))
+      .find()
+      .populate("user", "username profilePic isPrivate followers")
+      .populate("comments.user", "username profilePic")
+      .sort({ createdAt: -1 });
 
-    const visiblePosts = posts.filter((post) => {
+    const validPosts = posts.filter(post => post.user);
 
-      if (!post.user.isPrivate) return true;
+    const visiblePosts = validPosts
+      .filter(post => {
 
+        if (!post.user.isPrivate) return true;
 
-      return currentUser.following
-        .map((id) => id.toString())
-        .includes(post.user._id.toString());
-    });
+        return currentUser.following
+          .map(id => id.toString())
+          .includes(post.user._id.toString());
+      })
+      .map(post => ({
+        ...post.toObject(),
+        isOwner: post.user._id.toString() === currentUserId,
+        comments: post.comments.filter(c => c.user), 
+      }));
 
     res.json(visiblePosts);
   } catch (error) {
