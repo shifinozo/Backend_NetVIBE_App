@@ -68,7 +68,12 @@ const server = http.createServer(app);
 /* 🔥 SOCKET.IO SETUP */
 export const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    // origin: "http://localhost:5173",
+    origin: [
+  "http://localhost:5173",
+  "https://your-frontend.vercel.app"
+],
+
     credentials: true,
   },
 });
@@ -146,8 +151,13 @@ io.on("connection", (socket) => {
   });
 });
 
+const PORT = process.env.PORT || 5000;
 
-server.listen(5000, () => {
-  console.log("🚀 Backend running on http://localhost:5000");
+server.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
+
+// server.listen(5000, () => {
+//   console.log("🚀 Backend running on http://localhost:5000");
+// });
 
