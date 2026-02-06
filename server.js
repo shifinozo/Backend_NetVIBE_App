@@ -37,9 +37,9 @@
 // app.listen(5000, () => {
 //     console.log("Backend running on http://localhost:5000");
 //   });
- 
+
 // ----------------------------------------------------------------------------------
-  // good one
+// good one
 import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
@@ -68,17 +68,21 @@ const server = http.createServer(app);
 /* 🔥 SOCKET.IO SETUP */
 export const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
-//     origin: [
-//   "http://localhost:5173",
-//   "https://your-frontend.vercel.app"
-// ],
-
+    origin: [
+      "http://localhost:5173",
+      "https://frontend-net-vibe-app.vercel.app"
+    ],
     credentials: true,
   },
 });
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:5173",
+    "https://frontend-net-vibe-app.vercel.app"
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(passport.initialize());
 

@@ -21,9 +21,9 @@ authRoutes.get(
       process.env.JWT_SECRET,
       { expiresIn: "7d" }
     );
-    
-        res.redirect(
-      `http://localhost:5173/google-success?token=${token}&username=${req.user.username}&userId=${req.user._id}`
+
+    res.redirect(
+      `https://frontend-net-vibe-app.vercel.app/google-success?token=${token}&username=${req.user.username}&userId=${req.user._id}`
     );
 
   }
