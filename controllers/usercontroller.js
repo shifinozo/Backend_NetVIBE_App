@@ -94,8 +94,8 @@ export const verifyOtp = async (req, res) => {
 //         process.env.JWT_SECRET,
 //         { expiresIn: "7d" }
 //       );
-     
-      
+
+
 
 //       return res.status(200).json({
 //         message: "Google login successful",
@@ -129,7 +129,7 @@ export const verifyOtp = async (req, res) => {
 //       });
 //     }
 
-    
+
 //     const token = jwt.sign(
 //       { id: user._id },
 //       process.env.JWT_SECRET,
@@ -182,7 +182,7 @@ export const loginUser = async (req, res) => {
     }
 
     console.log("started");
-    
+
 
     const isMatch = await bcrypt.compare(password, user.password);
 
