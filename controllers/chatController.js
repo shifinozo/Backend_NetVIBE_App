@@ -2,6 +2,7 @@
 import Conversation from "../Models/Conversation.js";
 import Message from "../Models/Message.js";
 import { userModel } from "../Models/UserModel.js";
+import { uploadToCloudinary } from "../config/cloudinaryconfig.js";
 
 import { io } from "../server.js";
 
@@ -9,10 +10,22 @@ import { io } from "../server.js";
 export const sendMessage = async (req, res) => {
   const { conversationId, text } = req.body;
 
+  if (!text?.trim() && !req.file) {
+    return res.status(400).json({ message: "Message text or media is required" });
+  }
+
+  let media, mediaType;
+  if (req.file) {
+    media = await uploadToCloudinary(req.file.buffer);
+    mediaType = req.file.mimetype.startsWith("video/") ? "video" : "image";
+  }
+
   const message = await Message.create({
     conversation: conversationId,
     sender: req.user.id,
     text,
+    media,
+    mediaType,
   });
 
   const populatedMessage = await message.populate(
