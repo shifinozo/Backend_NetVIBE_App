@@ -65,24 +65,24 @@ connectDB();
 const app = express();
 const server = http.createServer(app);
 
+/* 🔥 CORS: allow any localhost port in dev (Vite bumps ports when 5173 is taken) + the deployed frontend */
+const allowedOrigin = (origin, callback) => {
+  if (!origin || /^http:\/\/localhost:\d+$/.test(origin) || origin === "https://frontend-net-vibe-app.vercel.app") {
+    return callback(null, true);
+  }
+  return callback(new Error("Not allowed by CORS"));
+};
+
 /* 🔥 SOCKET.IO SETUP */
 export const io = new Server(server, {
   cors: {
-    origin: [
-      "http://localhost:5173",
-      "http://localhost:5174",
-      "https://frontend-net-vibe-app.vercel.app"
-    ],
+    origin: allowedOrigin,
     credentials: true,
   },
 });
 
 app.use(cors({
-  origin: [
-    "http://localhost:5173",
-    "http://localhost:5174",
-    "https://frontend-net-vibe-app.vercel.app"
-  ],
+  origin: allowedOrigin,
   credentials: true
 }));
 app.use(express.json());
